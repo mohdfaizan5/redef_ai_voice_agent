@@ -1,4 +1,9 @@
 import logging
+import aiohttp  # Add this import at the top if not already there
+import random
+import asyncio
+from supabase import create_client, Client
+import os
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -8,8 +13,10 @@ from livekit.agents import (
     JobProcess,
     MetricsCollectedEvent,
     RoomInputOptions,
+    RunContext,
     WorkerOptions,
     cli,
+    function_tool,
     metrics,
 )
 from livekit.plugins import noise_cancellation, silero
@@ -18,12 +25,14 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
+supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
 
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
-            instructions="""You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
+            instructions="""You are a helpful voice AI assistant name Redef AI, you help people in productivity. The user is interacting with you via voice, even if you perceive the conversation as text.
             You eagerly assist users with their questions by providing information from your extensive knowledge.
             Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
             You are curious, friendly, and have a sense of humor.""",
@@ -32,19 +41,69 @@ class Assistant(Agent):
     # To add tools, use the @function_tool decorator.
     # Here's an example that adds a simple weather tool.
     # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
+    @function_tool
+    async def list_users(self):
+        """Fetch a list of users from the Supabase 'users' table."""
+        try:
+            data = supabase.table("users").select("email").limit(5).execute()
+            print(f"\n\n{data}\n\n")
+            if not data.data:
+                return "No users found in the database."
+            return f"Found {len(data.data)} users. Example: {data.data}"
+        except Exception as e:
+            return f"Error fetching users: {str(e)}"
+
+    @function_tool
+    async def random_fact(self):
+        """Fetches a random useless fact from a public API."""
+        url = "https://uselessfacts.jsph.pl/api/v2/facts/random"
+        print("💕💕💕💕💕💕💕💕💕")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return "Sorry, I couldn't fetch a random fact right now."
+                
+                data = await response.json()
+                print(data,"😘😘😘😘😘")
+                return data.get("text", "No fact found.")
+
+    @function_tool
+    async def crypto_price(self, symbol: str = "bitcoin"):
+        """Fetches the current price of a cryptocurrency (default: Bitcoin) in USD."""
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={symbol.lower()}&vs_currencies=usd"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return f"Couldn't fetch price for {symbol}."
+                data = await response.json()
+                if symbol.lower() not in data:
+                    return f"Symbol {symbol} not found."
+                price = data[symbol.lower()]["usd"]
+                return f"The current price of {symbol.capitalize()} is ${price}."
+
+
     # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    # async def math_test(self, a: int, b: int):
+    #     """A simple math test tool to confirm local computation works."""
+    #     await asyncio.sleep(0.2)  # simulate some processing delay
+    #     ops = ["+", "-", "*"]
+    #     op = random.choice(ops)
+    #     result = eval(f"{a}{op}{b}")
+    #     return f"{a} {op} {b} = {result}"
+
+    @function_tool
+    async def lookup_weather(self, location: str):
+        """Use this tool to look up current weather information in the given location.
+    
+        If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
+    
+        Args:
+            location: The location to look up weather information for (e.g. city name)
+        """
+    
+        # logger.info(f"Looking up weather for {location}")
+    
+        return "sunny with a temperature of 70 degrees."
 
 
 def prewarm(proc: JobProcess):
