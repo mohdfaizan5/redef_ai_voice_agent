@@ -54,6 +54,36 @@ class Assistant(Agent):
             return f"Error fetching users: {str(e)}"
 
     @function_tool
+    async def list_tasks(self):
+        """Fetch a list of users tasks left """
+        user_id = "01711181-d5f2-48ae-bf1e-ef7ad99f752a"
+        try:
+            data = supabase.table("tasks").select("id,name,category").eq("is_completed", False).limit(5).execute()
+            print(f"\n\n{data}\n\n")
+            if not data.data:
+                return "No tasks found in the database."
+            return f"Found {len(data.data)} tasks. Example: {data.data}"
+        except Exception as e:
+            return f"Error fetching tasks: {str(e)}"
+    @function_tool
+    async def list_deepwork(self):
+        """Fetch how much time has the user worked in hours, user can call it like pomodoro also """
+        try:
+            data = supabase.table("pomodoros").select('focus_time').execute()
+            total = 0
+            print(data)
+            for a in data.data:
+                total += a['focus_time']
+            
+            print(f"\n\n{total}\n\n")
+            if not data.data:
+                return "No tasks found in the database."
+            return f"total hours {int(total)/60}"
+        except Exception as e:
+            return f"Error fetching work hours: {str(e)}"
+
+   
+    @function_tool
     async def random_fact(self):
         """Fetches a random useless fact from a public API."""
         url = "https://uselessfacts.jsph.pl/api/v2/facts/random"
